@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>GST & 歩合計算機 + Chinami Invoice</title>
+  <title>GST & 歩合計算機 + Chinami Invoice (multi)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     * { box-sizing: border-box; }
@@ -80,6 +80,44 @@
       margin-top: 10px;
       background: #10b981;
     }
+    .invoice-card {
+      margin-top: 14px;
+      padding: 16px 14px 14px;
+      border-radius: 12px;
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      font-size: 14px;
+    }
+    .invoice-item-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 4px 0;
+      font-size: 13px;
+    }
+    .invoice-item-label {
+      max-width: 70%;
+    }
+    .invoice-item-value {
+      font-variant-numeric: tabular-nums;
+    }
+    .invoice-total {
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px dashed #a5b4fc;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      font-variant-numeric: tabular-nums;
+    }
+    .invoice-btn {
+      margin-top: 10px;
+      background: #4f46e5;
+    }
+    .invoice-empty {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
   </style>
 </head>
 <body>
@@ -87,15 +125,15 @@
     <h1>GST & 歩合計算機</h1>
 
     <label for="amount">金額 (GST込み):</label>
-    <input id="amount" type="number" inputmode="decimal" placeholder="例: 1190" />
+    <input id="amount" type="number" inputmode="decimal" placeholder="例: 1000" />
 
     <label for="category">カテゴリを選択:</label>
     <select id="category">
-  <option value="">選択してください</option>
-  <option value="0.40">サービス売上 (40%)</option>
-  <option value="0.20">コンテンツモデル (20%)</option>
-  <option value="0.10">物販売上 (10%)</option>
-</select>
+      <option value="">選択してください</option>
+      <option value="0.40">サービス売上 (40%)</option>
+      <option value="0.20">コンテンツモデル (20%)</option>
+      <option value="0.10">物販売上 (10%)</option>
+    </select>
 
     <button onclick="calculate()">計算する</button>
 
@@ -120,19 +158,33 @@
         ※ 計算: GST抜き = 金額 ÷ 1.15、歩合金額 = GST抜き × 歩合率
       </p>
 
-      <!-- 請求書ボタン -->
-      <button class="sub-btn" onclick="openInvoiceForChinami()">
-        チナミさん請求書を作成（PDF用）
+      <!-- この計算結果を請求書に追加 -->
+      <button class="sub-btn" onclick="addCurrentToInvoice()">
+        この売上を請求書に追加
       </button>
       <p class="small-note">
-        ボタンを押すとブラウザでインボイスが開きます。<br>
-        そのまま「共有」→「プリント」→「PDFとして保存」で提出用にできます。
+        例）サービス 1000、物販 100、モデル 200 をそれぞれ計算して「請求書に追加」を押すと、<br>
+        1枚の請求書にまとめて出力できます。
       </p>
+    </div>
+
+    <!-- 請求書に追加された項目一覧 -->
+    <div id="invoiceCard" class="invoice-card" style="display:none;">
+      <div style="font-weight:600; margin-bottom:4px;">請求書に追加された売上</div>
+      <div id="invoiceSummaryList"></div>
+      <div id="invoiceTotals" class="invoice-total" style="display:none;"></div>
+      <button class="invoice-btn" onclick="openInvoiceForChinami()">
+        チナミさん請求書を作成（PDF用）
+      </button>
+      <div class="invoice-empty" id="invoiceEmptyMsg" style="display:none;">
+        まだ項目がありません。「計算する」→「この売上を請求書に追加」を押してください。
+      </div>
     </div>
   </div>
 
   <script>
-    let lastResult = null; // 直近の計算結果を保存
+    let lastResult = null;        // 直近の計算結果
+    let invoiceItems = [];        // 請求書に含める全項目
 
     function calculate() {
       const amountInput = document.getElementById('amount');
@@ -160,7 +212,7 @@
 
       document.getElementById('result').style.display = 'block';
 
-      // 請求書用に保存
+      // 請求書用に保存（1件分）
       lastResult = {
         gross: amount,
         gstExclusive: gstExclusive,
@@ -168,6 +220,95 @@
         rate: rate,
         commissionAmount: commissionAmount,
       };
+    }
+
+    function getDescriptionForRate(rate) {
+      // rate によって説明文を変える
+      if (Math.abs(rate - 0.40) < 0.0001) {
+        return 'Hairdressing services (Service 40%)';
+      } else if (Math.abs(rate - 0.20) < 0.0001) {
+        return 'Model / Content services (20%)';
+      } else if (Math.abs(rate - 0.10) < 0.0001) {
+        return 'Retail product sales (10%)';
+      } else {
+        return 'Services';
+      }
+    }
+
+    function addCurrentToInvoice() {
+      if (!lastResult) {
+        alert('先に「計算する」を押してください。');
+        return;
+      }
+
+      const desc = getDescriptionForRate(lastResult.rate);
+
+      invoiceItems.push({
+        description: desc,
+        gross: lastResult.gross,
+        gstExclusive: lastResult.gstExclusive,
+        rate: lastResult.rate,
+        commissionAmount: lastResult.commissionAmount
+      });
+
+      updateInvoiceSummary();
+    }
+
+    function updateInvoiceSummary() {
+      const card = document.getElementById('invoiceCard');
+      const list = document.getElementById('invoiceSummaryList');
+      const totalsDiv = document.getElementById('invoiceTotals');
+      const emptyMsg = document.getElementById('invoiceEmptyMsg');
+
+      card.style.display = 'block';
+
+      if (invoiceItems.length === 0) {
+        list.innerHTML = '';
+        totalsDiv.style.display = 'none';
+        emptyMsg.style.display = 'block';
+        return;
+      }
+
+      emptyMsg.style.display = 'none';
+
+      let html = '';
+      let totalGross = 0;
+      let totalCommission = 0;
+
+      invoiceItems.forEach(function (item, index) {
+        totalGross += item.gross;
+        totalCommission += item.commissionAmount;
+
+        html += `
+          <div class="invoice-item-row">
+            <div class="invoice-item-label">
+              ${index + 1}. ${item.description}<br>
+              <span style="font-size:11px; color:#555;">
+                売上 $${item.gross.toFixed(2)} / 1.15 = $${item.gstExclusive.toFixed(2)} (excl) × ${(item.rate * 100).toFixed(0)}%
+              </span>
+            </div>
+            <div class="invoice-item-value">
+              $${item.commissionAmount.toFixed(2)}
+            </div>
+          </div>
+        `;
+      });
+
+      list.innerHTML = html;
+
+      totalsDiv.innerHTML = `
+        <span>合計売上 (GST込み)</span>
+        <span>$${totalGross.toFixed(2)}</span>
+      `;
+      totalsDiv.innerHTML += `
+        <br>
+        <span>合計コミッション</span>
+        <span>$${totalCommission.toFixed(2)}</span>
+      `;
+
+      totalsDiv.style.display = 'flex';
+      totalsDiv.style.flexDirection = 'column';
+      totalsDiv.style.alignItems = 'flex-end';
     }
 
     function formatDateForInvoice(date) {
@@ -179,18 +320,40 @@
     }
 
     function openInvoiceForChinami() {
-      if (!lastResult) {
-        alert('先に「計算する」を押してください。');
+      if (!invoiceItems || invoiceItems.length === 0) {
+        alert('請求書に追加された項目がありません。');
         return;
       }
 
       const today = new Date();
       const dateStr = formatDateForInvoice(today);
 
-      const gross = lastResult.gross;
-      const gstExclusive = lastResult.gstExclusive;
-      const rate = lastResult.rate;
-      const commissionAmount = lastResult.commissionAmount;
+      let totalGross = 0;
+      let totalCommission = 0;
+
+      invoiceItems.forEach(function (item) {
+        totalGross += item.gross;
+        totalCommission += item.commissionAmount;
+      });
+
+      const rowsHtml = invoiceItems.map(function (item) {
+        return `
+          <tr>
+            <td>${dateStr}</td>
+            <td>${item.description}</td>
+            <td class="num">$${item.gross.toFixed(2)} incl</td>
+            <td class="num">${(item.rate * 100).toFixed(0)}%</td>
+            <td class="num">$${item.commissionAmount.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td></td>
+            <td colspan="4" style="color:#555;">
+              Calc: $${item.gross.toFixed(2)} / 1.15 = $${item.gstExclusive.toFixed(2)} (excl),
+              commission ${(item.rate * 100).toFixed(0)}% = $${item.commissionAmount.toFixed(2)}
+            </td>
+          </tr>
+        `;
+      }).join('');
 
       const win = window.open('', '_blank');
 
@@ -246,35 +409,22 @@
       </tr>
     </thead>
     <tbody>
-      <tr>
-        <td>${dateStr}</td>
-        <td>Hairdressing services (Service ${(rate * 100).toFixed(0)}%)</td>
-        <td class="num">$${gross.toFixed(2)} incl</td>
-        <td class="num">${(rate * 100).toFixed(0)}%</td>
-        <td class="num">$${commissionAmount.toFixed(2)}</td>
-      </tr>
-      <tr>
-        <td></td>
-        <td colspan="4" style="color:#555;">
-          Calc: $${gross.toFixed(2)} / 1.15 = $${gstExclusive.toFixed(2)} (excl),
-          commission ${(rate * 100).toFixed(0)}% = $${commissionAmount.toFixed(2)}
-        </td>
-      </tr>
+      ${rowsHtml}
     </tbody>
     <tfoot>
       <tr>
         <td></td>
         <td class="num">Total</td>
-        <td class="num">$${gross.toFixed(2)}</td>
+        <td class="num">$${totalGross.toFixed(2)}</td>
         <td></td>
-        <td class="num">$${commissionAmount.toFixed(2)}</td>
+        <td class="num">$${totalCommission.toFixed(2)}</td>
       </tr>
     </tfoot>
   </table>
 
-  <div class="total">TOTAL DUE: $${commissionAmount.toFixed(2)}</div>
+  <div class="total">TOTAL DUE: $${totalCommission.toFixed(2)}</div>
   <div class="note">GST not registered. Please make payment within 7 days to the bank account listed above.</div>
-  <div class="note">Commission is calculated on GST-exclusive sales (Total / 1.15 × ${(rate * 100).toFixed(0)}%).</div>
+  <div class="note">Commission is calculated on GST-exclusive sales (Total / 1.15 × 各歩合率) for each line item.</div>
 </div>
 
 <script>
