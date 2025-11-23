@@ -1,111 +1,291 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>NZ GST & Commission Calculator</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <title>GST & 歩合計算機 + Chinami Invoice</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    * { box-sizing: border-box; }
     body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      padding: 0;
-      background: #f4f4f9;
-      color: #333;
-    }
-    h1 {
-      text-align: center;
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: #f5f5fb;
       color: #222;
     }
     .container {
-      max-width: 500px;
-      margin: auto;
+      max-width: 420px;
+      margin: 0 auto;
       background: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      border-radius: 18px;
+      padding: 24px 18px 28px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+    }
+    h1 {
+      text-align: center;
+      margin: 4px 0 20px;
+      font-size: 26px;
+      letter-spacing: 0.04em;
     }
     label {
-      font-weight: bold;
       display: block;
-      margin-top: 15px;
+      font-weight: 600;
+      margin: 14px 4px 4px;
+      font-size: 14px;
     }
-    input, select {
+    input, select, button {
       width: 100%;
-      padding: 10px;
-      margin-top: 5px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
       font-size: 16px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #d0d4e0;
+      outline: none;
+      font-family: inherit;
+    }
+    input:focus, select:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
     }
     button {
-      width: 100%;
-      margin-top: 20px;
-      padding: 12px;
-      background: #007BFF;
+      margin-top: 18px;
+      background: #0c61d9;
+      color: #fff;
       border: none;
-      color: white;
-      font-size: 16px;
-      border-radius: 5px;
+      font-weight: 600;
       cursor: pointer;
     }
     button:hover {
-      background: #0056b3;
+      opacity: 0.95;
     }
-    .result {
-      margin-top: 20px;
-      padding: 15px;
-      background: #e9f7ef;
-      border: 1px solid #b2dfdb;
-      border-radius: 5px;
+    .result-card {
+      margin-top: 18px;
+      padding: 18px 14px 16px;
+      border-radius: 12px;
+      background: #e8f9f1;
+      border: 1px solid #b7e4d0;
+      font-size: 15px;
+    }
+    .result-row {
+      margin: 5px 0;
+    }
+    .result-label {
+      font-weight: 700;
+    }
+    .small-note {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #555;
+    }
+    .sub-btn {
+      margin-top: 10px;
+      background: #10b981;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>GST & 歩合計算機</h1>
+
     <label for="amount">金額 (GST込み):</label>
-    <input type="number" id="amount" placeholder="例: 200">
+    <input id="amount" type="number" inputmode="decimal" placeholder="例: 1190" />
 
     <label for="category">カテゴリを選択:</label>
     <select id="category">
-      <option value="service">サービス売上 (40%)</option>
-      <option value="model">コンテンツモデル (20%)</option>
-      <option value="retail">物販売上 (10%)</option>
+      <option value="">選択してください</option>
+      <option value="0.40">サービス売上 (40%)</option>
+      <option value="0.35">サービス売上 (35%)</option>
+      <option value="0.30">サービス売上 (30%)</option>
+      <option value="0.10">店販売上 (10%)</option>
     </select>
 
     <button onclick="calculate()">計算する</button>
 
-    <div class="result" id="result"></div>
+    <div id="result" class="result-card" style="display:none;">
+      <div class="result-row">
+        <span class="result-label">GST抜き金額:</span>
+        <span id="gstExclusiveDisplay"></span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">GST:</span>
+        <span id="gstDisplay"></span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">歩合率:</span>
+        <span id="rateDisplay"></span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">歩合金額:</span>
+        <span id="commissionDisplay"></span>
+      </div>
+      <p class="small-note">
+        ※ 計算: GST抜き = 金額 ÷ 1.15、歩合金額 = GST抜き × 歩合率
+      </p>
+
+      <!-- 請求書ボタン -->
+      <button class="sub-btn" onclick="openInvoiceForChinami()">
+        チナミさん請求書を作成（PDF用）
+      </button>
+      <p class="small-note">
+        ボタンを押すとブラウザでインボイスが開きます。<br>
+        そのまま「共有」→「プリント」→「PDFとして保存」で提出用にできます。
+      </p>
+    </div>
   </div>
 
   <script>
-    function calculate() {
-      const amountIncl = parseFloat(document.getElementById('amount').value);
-      const category = document.getElementById('category').value;
+    let lastResult = null; // 直近の計算結果を保存
 
-      if (isNaN(amountIncl) || amountIncl <= 0) {
-        document.getElementById('result').innerHTML = "金額を入力してください。";
+    function calculate() {
+      const amountInput = document.getElementById('amount');
+      const categorySelect = document.getElementById('category');
+      const amount = parseFloat(amountInput.value);
+      const rate = parseFloat(categorySelect.value);
+
+      if (isNaN(amount) || isNaN(rate)) {
+        alert('金額とカテゴリを正しく入力・選択してください。');
         return;
       }
 
-      // GST抜き
-      const amountExcl = amountIncl / 1.15;
-      const gst = amountIncl - amountExcl;
+      const gstExclusive = amount / 1.15;
+      const gst = amount - gstExclusive;
+      const commissionAmount = gstExclusive * rate;
 
-      // 歩合率
-      let rate = 0;
-      if (category === "service") rate = 0.40;
-      if (category === "model") rate = 0.20;
-      if (category === "retail") rate = 0.10;
+      document.getElementById('gstExclusiveDisplay').textContent =
+        '$' + gstExclusive.toFixed(2);
+      document.getElementById('gstDisplay').textContent =
+        '$' + gst.toFixed(2);
+      document.getElementById('rateDisplay').textContent =
+        (rate * 100).toFixed(0) + '%';
+      document.getElementById('commissionDisplay').textContent =
+        '$' + commissionAmount.toFixed(2);
 
-      const commission = amountExcl * rate;
+      document.getElementById('result').style.display = 'block';
 
-      document.getElementById('result').innerHTML = `
-        <p><strong>GST抜き金額:</strong> $${amountExcl.toFixed(2)}</p>
-        <p><strong>GST:</strong> $${gst.toFixed(2)}</p>
-        <p><strong>歩合率:</strong> ${(rate*100).toFixed(0)}%</p>
-        <p><strong>歩合金額:</strong> $${commission.toFixed(2)}</p>
-      `;
+      // 請求書用に保存
+      lastResult = {
+        gross: amount,
+        gstExclusive: gstExclusive,
+        gst: gst,
+        rate: rate,
+        commissionAmount: commissionAmount,
+      };
+    }
+
+    function formatDateForInvoice(date) {
+      const day = date.getDate();
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const month = months[date.getMonth()];
+      const year = date.getFullYear();
+      return day + ' ' + month + ' ' + year; // 19 Oct 2025 形式
+    }
+
+    function openInvoiceForChinami() {
+      if (!lastResult) {
+        alert('先に「計算する」を押してください。');
+        return;
+      }
+
+      const today = new Date();
+      const dateStr = formatDateForInvoice(today);
+
+      const gross = lastResult.gross;
+      const gstExclusive = lastResult.gstExclusive;
+      const rate = lastResult.rate;
+      const commissionAmount = lastResult.commissionAmount;
+
+      const win = window.open('', '_blank');
+
+      win.document.write(`
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Invoice - Chinami Imabeppu (${dateStr})</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body { font-family: Arial, Helvetica, sans-serif; margin:24px; color:#222; }
+  .wrap { max-width:860px; margin:0 auto; }
+  h1 { margin:0 0 8px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:10px; }
+  .box { border:1px solid #ddd; border-radius:10px; padding:12px; }
+  table { width:100%; border-collapse:collapse; margin-top:16px; }
+  th, td { border-bottom:1px solid #eee; padding:10px; text-align:left; font-size:15px; }
+  th { background:#f7f7f9; }
+  .num { text-align:right; font-variant-numeric: tabular-nums; }
+  tfoot td { font-weight:700; }
+  .total { font-size:18px; font-weight:700; margin-top:14px; }
+  .note { margin-top:6px; color:#444; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>INVOICE</h1>
+  <div>Invoice Date: <b>${dateStr}</b></div>
+
+  <div class="grid">
+    <div class="box">
+      <div><b>From:</b></div>
+      <div>Chinami Imabeppu</div>
+      <div>18C Otanerua Road, Hatfield Beach, Orewa 0931</div>
+      <div>Bank: 06-0513-0835329-01 (CHINAMI IMABEPPU)</div>
+    </div>
+    <div class="box">
+      <div><b>To:</b></div>
+      <div>YKTL ALL STAR Limited t/a Yusukay Hair Studio</div>
+      <div>136 Kitchener Road, Milford, Auckland 0620</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:110px;">Date</th>
+        <th>Description of Services</th>
+        <th class="num" style="width:160px;">Total Sales (GST incl.)</th>
+        <th class="num" style="width:80px;">Rate</th>
+        <th class="num" style="width:160px;">Commission Payable</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>${dateStr}</td>
+        <td>Hairdressing services (Service ${(rate * 100).toFixed(0)}%)</td>
+        <td class="num">$${gross.toFixed(2)} incl</td>
+        <td class="num">${(rate * 100).toFixed(0)}%</td>
+        <td class="num">$${commissionAmount.toFixed(2)}</td>
+      </tr>
+      <tr>
+        <td></td>
+        <td colspan="4" style="color:#555;">
+          Calc: $${gross.toFixed(2)} / 1.15 = $${gstExclusive.toFixed(2)} (excl),
+          commission ${(rate * 100).toFixed(0)}% = $${commissionAmount.toFixed(2)}
+        </td>
+      </tr>
+    </tbody>
+    <tfoot>
+      <tr>
+        <td></td>
+        <td class="num">Total</td>
+        <td class="num">$${gross.toFixed(2)}</td>
+        <td></td>
+        <td class="num">$${commissionAmount.toFixed(2)}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="total">TOTAL DUE: $${commissionAmount.toFixed(2)}</div>
+  <div class="note">GST not registered. Please make payment within 7 days to the bank account listed above.</div>
+  <div class="note">Commission is calculated on GST-exclusive sales (Total / 1.15 × ${(rate * 100).toFixed(0)}%).</div>
+</div>
+
+<script>
+  window.print();
+<\/script>
+</body>
+</html>
+      `);
+
+      win.document.close();
     }
   </script>
 </body>
