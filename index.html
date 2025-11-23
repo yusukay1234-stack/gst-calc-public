@@ -104,10 +104,14 @@
       margin-top: 8px;
       padding-top: 6px;
       border-top: 1px dashed #a5b4fc;
-      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+    }
+    .invoice-total-line {
       display: flex;
       justify-content: space-between;
-      font-variant-numeric: tabular-nums;
+      margin-top: 2px;
+      font-weight: 600;
     }
     .invoice-btn {
       margin-top: 10px;
@@ -123,6 +127,10 @@
 <body>
   <div class="container">
     <h1>GST & 歩合計算機</h1>
+
+    <!-- 日付（売上日 / 請求日） -->
+    <label for="invoiceDate">日付（売上日 / 請求日）:</label>
+    <input id="invoiceDate" type="date" />
 
     <label for="amount">金額 (GST込み):</label>
     <input id="amount" type="number" inputmode="decimal" placeholder="例: 1000" />
@@ -297,18 +305,17 @@
       list.innerHTML = html;
 
       totalsDiv.innerHTML = `
-        <span>合計売上 (GST込み)</span>
-        <span>$${totalGross.toFixed(2)}</span>
-      `;
-      totalsDiv.innerHTML += `
-        <br>
-        <span>合計コミッション</span>
-        <span>$${totalCommission.toFixed(2)}</span>
+        <div class="invoice-total-line">
+          <span>合計売上 (GST込み)</span>
+          <span>$${totalGross.toFixed(2)}</span>
+        </div>
+        <div class="invoice-total-line">
+          <span>合計コミッション</span>
+          <span>$${totalCommission.toFixed(2)}</span>
+        </div>
       `;
 
-      totalsDiv.style.display = 'flex';
-      totalsDiv.style.flexDirection = 'column';
-      totalsDiv.style.alignItems = 'flex-end';
+      totalsDiv.style.display = 'block';
     }
 
     function formatDateForInvoice(date) {
@@ -319,14 +326,40 @@
       return day + ' ' + month + ' ' + year; // 19 Oct 2025 形式
     }
 
+    // 入力された日付（なければ今日）を "19 Oct 2025" 形式で返す
+    function getInvoiceDateStr() {
+      const input = document.getElementById('invoiceDate');
+      const value = input ? input.value : '';
+
+      if (!value) {
+        // 何も入力されていない場合は「今日」を使う
+        return formatDateForInvoice(new Date());
+      }
+
+      // value は "2025-10-19" のような形式
+      const parts = value.split('-'); // [YYYY, MM, DD]
+      if (parts.length !== 3) {
+        return formatDateForInvoice(new Date());
+      }
+
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1; // JSは 0=Jan
+      const day = parseInt(parts[2], 10);
+
+      const d = new Date(year, month, day);
+      if (isNaN(d.getTime())) {
+        return formatDateForInvoice(new Date());
+      }
+      return formatDateForInvoice(d);
+    }
+
     function openInvoiceForChinami() {
       if (!invoiceItems || invoiceItems.length === 0) {
         alert('請求書に追加された項目がありません。');
         return;
       }
 
-      const today = new Date();
-      const dateStr = formatDateForInvoice(today);
+      const dateStr = getInvoiceDateStr();
 
       let totalGross = 0;
       let totalCommission = 0;
